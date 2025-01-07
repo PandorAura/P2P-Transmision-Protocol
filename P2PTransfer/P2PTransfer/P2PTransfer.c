@@ -1,167 +1,164 @@
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <stdint.h>
-#include <assert.h>
 #include <windows.h>
+#include <stdbool.h>
 
+// Link against ws2_32.lib
 #pragma comment(lib, "ws2_32.lib")
 
-#define TCP_PORT 12345
-#define UDP_PORT 12346
 #define CHUNK_SIZE 4096
-#define BUFFER_SIZE 1024
-#define MAX_PEERS 10
 
-// Peer Structure to store IP and Port
-typedef struct {
-    char ip[INET_ADDRSTRLEN];
-    uint16_t port;
-} Peer;
+void cleanup(SOCKET sock) {
+    closesocket(sock);
+    WSACleanup();
+}
 
-Peer peers[MAX_PEERS];
-int peer_count = 0;
-
-// Initialize Winsock
+// Helper to initialize Winsock
 int init_winsock() {
-    WSADATA wsa_data;
-    return WSAStartup(MAKEWORD(2, 2), &wsa_data);
-}
-
-// Helper to add a new peer
-void add_peer(const char* ip, uint16_t port) {
-    if (peer_count < MAX_PEERS) {
-        strcpy_s(peers[peer_count].ip, sizeof(peers[peer_count].ip), ip);
-        peers[peer_count].port = port;
-        peer_count++;
+    WSADATA wsa;
+    int result = WSAStartup(MAKEWORD(2, 2), &wsa);
+    if (result != 0) {
+        printf("WSAStartup failed with error: %d\n", result);
     }
+    return result;
 }
 
-// Send file metadata (size, chunks, etc.)
-void send_metadata_request(SOCKET tcp_sock, const char* file_name, struct sockaddr_in* peer_addr) {
-    // Send metadata request over TCP
-    char buffer[BUFFER_SIZE];
-    snprintf(buffer, sizeof(buffer), "METADATA_REQ %s", file_name);
-    sendto(tcp_sock, buffer, strlen(buffer), 0, (struct sockaddr*)peer_addr, sizeof(*peer_addr));
-}
-
-// Request a file chunk over UDP
-void request_file_chunk(SOCKET udp_sock, const char* file_name, uint64_t chunk_number, struct sockaddr_in* peer_addr) {
-    char buffer[BUFFER_SIZE];
-    snprintf(buffer, sizeof(buffer), "CHUNK_REQ %s %llu", file_name, chunk_number);
-    sendto(udp_sock, buffer, strlen(buffer), 0, (struct sockaddr*)peer_addr, sizeof(*peer_addr));
-}
-
-// Receive file chunk over UDP
-void receive_file_chunk(SOCKET udp_sock, uint8_t* chunk_buffer) {
-    struct sockaddr_in peer_addr;
-    int peer_addr_len = sizeof(peer_addr);
-    int bytes_received = recvfrom(udp_sock, (char*)chunk_buffer, CHUNK_SIZE, 0, (struct sockaddr*)&peer_addr, &peer_addr_len);
-    if (bytes_received == SOCKET_ERROR) {
-        printf("Error receiving file chunk\n");
+// Function to send a file
+void send_file(SOCKET peer_socket, const char* filename) {
+    FILE* fp = fopen(filename, "rb");
+    if (!fp) {
+        printf("Cannot open file '%s'\n", filename);
         return;
     }
-    printf("Received chunk of size %d\n", bytes_received);
+
+    // Send the filename length and filename
+    int filename_length = strlen(filename) + 1;
+    send(peer_socket, (char*)&filename_length, sizeof(filename_length), 0);
+    send(peer_socket, filename, filename_length, 0);
+
+    // Send the file size
+    fseek(fp, 0, SEEK_END);
+    long file_size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    send(peer_socket, (char*)&file_size, sizeof(file_size), 0);
+
+    // Send file content in chunks
+    char buffer[CHUNK_SIZE];
+    size_t bytes_read;
+    while ((bytes_read = fread(buffer, 1, CHUNK_SIZE, fp)) > 0) {
+        send(peer_socket, buffer, bytes_read, 0);
+    }
+
+    printf("File '%s' sent successfully.\n", filename);
+    fclose(fp);
 }
 
-// Main server-side functionality
-DWORD WINAPI server_side(LPVOID lpParam) {
-    SOCKET tcp_sock = socket(AF_INET, SOCK_STREAM, 0);
-    SOCKET udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
+// Function to receive a file
+void receive_file(SOCKET peer_socket) {
+    // Receive the filename length and filename
+    int filename_length;
+    recv(peer_socket, (char*)&filename_length, sizeof(filename_length), 0);
+    char filename[256];
+    recv(peer_socket, filename, filename_length, 0);
 
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(TCP_PORT);
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(tcp_sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
-        printf("TCP Bind failed: %d\n", WSAGetLastError());
-        return 1;
+    // Open the file for writing
+    FILE* fp = fopen(filename, "wb");
+    if (!fp) {
+        printf("Cannot create file '%s'\n", filename);
+        return;
     }
 
-    if (bind(udp_sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
-        printf("UDP Bind failed: %d\n", WSAGetLastError());
-        return 1;
+    // Receive the file size
+    long file_size;
+    recv(peer_socket, (char*)&file_size, sizeof(file_size), 0);
+
+    // Receive the file content
+    char buffer[CHUNK_SIZE];
+    long total_received = 0;
+    int bytes_received;
+    while (total_received < file_size &&
+        (bytes_received = recv(peer_socket, buffer, CHUNK_SIZE, 0)) > 0) {
+        fwrite(buffer, 1, bytes_received, fp);
+        total_received += bytes_received;
     }
 
-    listen(tcp_sock, 5);
-    printf("Server listening for connections...\n");
+    printf("File '%s' received successfully.\n", filename);
+    fclose(fp);
+}
 
-    while (1) {
-        struct sockaddr_in client_addr;
-        int client_addr_len = sizeof(client_addr);
-        SOCKET client_sock = accept(tcp_sock, (struct sockaddr*)&client_addr, &client_addr_len);
-        if (client_sock == INVALID_SOCKET) {
-            printf("Accept failed: %d\n", WSAGetLastError());
-            continue;
+// Main peer-to-peer logic
+void p2p_peer(const char* listen_port, const char* connect_ip, const char* connect_port, const char* filename) {
+    // Start listening
+    SOCKET listen_socket = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in listen_addr = { 0 };
+    listen_addr.sin_family = AF_INET;
+    listen_addr.sin_port = htons(atoi(listen_port));
+    listen_addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(listen_socket, (struct sockaddr*)&listen_addr, sizeof(listen_addr)) < 0) {
+        printf("Bind failed with error code: %d\n", WSAGetLastError());
+        cleanup(listen_socket);
+        return;
+    }
+    listen(listen_socket, 1);
+
+    printf("Listening on port %s...\n", listen_port);
+
+    // Attempt to connect to another peer if IP and port are provided
+    SOCKET connect_socket = INVALID_SOCKET;
+    if (connect_ip && connect_port) {
+        connect_socket = socket(AF_INET, SOCK_STREAM, 0);
+        struct sockaddr_in peer_addr = { 0 };
+        peer_addr.sin_family = AF_INET;
+        peer_addr.sin_port = htons(atoi(connect_port));
+        inet_pton(AF_INET, connect_ip, &peer_addr.sin_addr);
+
+        if (connect(connect_socket, (struct sockaddr*)&peer_addr, sizeof(peer_addr)) == 0) {
+            printf("Connected to peer %s:%s\n", connect_ip, connect_port);
+            send_file(connect_socket, filename);
+            receive_file(connect_socket);
         }
-
-        // Process incoming peer discovery or file metadata requests here...
-        printf("Server accepted connection\n");
+        else {
+            printf("Failed to connect to peer.\n");
+        }
     }
 
-    return 0;
+    // Accept incoming connections
+    struct sockaddr_in peer_addr;
+    int peer_addr_len = sizeof(peer_addr);
+    SOCKET peer_socket = accept(listen_socket, (struct sockaddr*)&peer_addr, &peer_addr_len);
+
+    if (peer_socket != INVALID_SOCKET) {
+        printf("Peer connected.\n");
+        receive_file(peer_socket);
+        send_file(peer_socket, filename);
+    }
+
+    cleanup(listen_socket);
+    if (connect_socket != INVALID_SOCKET) cleanup(connect_socket);
 }
 
-// Main client-side functionality
-DWORD WINAPI client_side(LPVOID lpParam) {
-    const char* peer_ip = "127.0.0.1";
-    uint16_t peer_port = TCP_PORT;
-    const char* file_name = "test_file.txt";
+int main(int argc, char* argv[]) {
+    if (init_winsock() != 0) return 1;
 
-    printf("Client starting...\n");
-
-    SOCKET tcp_sock = socket(AF_INET, SOCK_STREAM, 0);
-    SOCKET udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
-
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(peer_port);
-    inet_pton(AF_INET, peer_ip, &server_addr.sin_addr);
-
-    if (connect(tcp_sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) == SOCKET_ERROR) {
-        printf("Connection failed: %d\n", WSAGetLastError());
+    if (argc < 2) {
+        printf("Usage:\n");
+        printf("  %s <listen_port> [peer_ip] [peer_port] [file_to_send]\n", argv[0]);
+        WSACleanup();
         return 1;
     }
 
-    // Send metadata request for a file
-    send_metadata_request(tcp_sock, file_name, &server_addr);
+    const char* listen_port = argv[1];
+    const char* connect_ip = argc > 3 ? argv[2] : NULL;
+    const char* connect_port = argc > 3 ? argv[3] : NULL;
+    const char* filename = argc > 4 ? argv[4] : "received_file.txt";
 
-    // Request file chunks over UDP
-    uint64_t chunk_number = 0;
-    uint8_t chunk_buffer[CHUNK_SIZE];
-    while (1) {
-        request_file_chunk(udp_sock, file_name, chunk_number, &server_addr);
-        receive_file_chunk(udp_sock, chunk_buffer);
-        chunk_number++;
-    }
-
-    return 0;
-}
-
-// Main function
-int main() {
-    if (init_winsock() != 0) {
-        printf("Winsock initialization failed\n");
-        return 1;
-    }
-
-    // Create threads for server and client
-    HANDLE server_thread, client_thread;
-    server_thread = CreateThread(NULL, 0, server_side, NULL, 0, NULL);
-
-    // Sleep briefly to give the server a chance to start before the client attempts to connect
-    Sleep(1000);  // 1-second delay
-
-    client_thread = CreateThread(NULL, 0, client_side, NULL, 0, NULL);
-
-    // Wait for both threads to finish
-    WaitForSingleObject(server_thread, INFINITE);
-    WaitForSingleObject(client_thread, INFINITE);
+    p2p_peer(listen_port, connect_ip, connect_port, filename);
 
     WSACleanup();
     return 0;
