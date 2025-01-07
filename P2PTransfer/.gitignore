@@ -1,0 +1,88 @@
+# Ignore compiled object files and executable
+*.o
+*.out
+*.exe
+*.a
+*.so
+
+# Ignore backup files
+*~
+*.bak
+
+# Ignore build directories
+build/
+bin/
+obj/
+
+# Ignore IDE or editor-specific files (e.g., VSCode, Emacs, etc.)
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.project
+*.classpath
+*.settings/
+*.swp
+*.swo
+
+# Ignore MacOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Ignore logs
+*.log
+
+# Ignore Visual Studio files
+*.vsidx
+*.suo
+*.tlog
+*.ipch
+.vs/
+
+# Ignore temporary files created by text editors (Emacs, Vim, etc.)
+*.~*
+*.swp
+*.swo
+
+# Ignore generated files from CMake (if applicable)
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Makefile
+*.cmake
+
+# Ignore Node.js/JavaScript dependencies (if applicable)
+node_modules/
+
+# Ignore temporary or system-generated files in certain environments
+Thumbs.db
+ehthumbs.db
+
+# Ignore Python-specific files (if applicable)
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+
+# Ignore JetBrains IDE files (e.g., IntelliJ IDEA, PhpStorm)
+.idea/
+
+# Ignore generated documentation files
+*.doxygen
+
+# Ignore other environment-specific or third-party files
+*.tgz
+*.tar.gz
+*.tar.bz2
+*.zip
+*.rar
+# Ignore object files with the .obj extension
+*.obj
+*.vcxproj
+*.ilk
+*.pdb
+*.idb
+*.filters
+*.user
+*.recipe

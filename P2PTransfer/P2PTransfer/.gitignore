@@ -1,0 +1,27 @@
+# Ignore compiled object files and executable
+*.o
+*.out
+*.exe
+*.a
+*.so
+
+# Ignore backup files
+*~
+*.bak
+
+# Ignore build directories
+build/
+bin/
+obj/
+
+# Ignore IDE or editor-specific files (e.g., VSCode, Emacs)
+.vscode/
+.idea/
+
+# Ignore MacOS system files
+.DS_Store
+
+# Ignore logs
+*.log
+
+*.vsidx
