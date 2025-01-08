@@ -21,3 +21,7 @@ Features:
    - Start one peer in "listening only" mode (no IP/port arguments).
    - Start another peer specifying the IP and port of the first peer, plus a filename to send.
    - They exchange files in both directions.
+
+
+https://github.com/user-attachments/assets/f3bf26de-720b-4ef3-b189-26f675f3a01e
+
