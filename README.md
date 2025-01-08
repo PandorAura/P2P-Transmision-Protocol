@@ -1,3 +1,5 @@
+https://github.com/user-attachments/assets/f3bf26de-720b-4ef3-b189-26f675f3a01e
+
 P2P FILE TRANSFER 
 ----------------------------------
 
@@ -24,5 +26,5 @@ Features:
 
 In the context of the project, there was also an attempt to make it work using a tracker, work can be found in the repository.
 
-https://github.com/user-attachments/assets/f3bf26de-720b-4ef3-b189-26f675f3a01e
+
 
