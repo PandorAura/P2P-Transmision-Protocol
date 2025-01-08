@@ -7,8 +7,6 @@
 #include <string.h>
 #include <windows.h>
 #include <stdbool.h>
-
-// Link against ws2_32.lib
 #pragma comment(lib, "ws2_32.lib")
 
 #define CHUNK_SIZE 4096
@@ -17,8 +15,6 @@ void cleanup(SOCKET sock) {
     closesocket(sock);
     WSACleanup();
 }
-
-// Helper to initialize Winsock
 int init_winsock() {
     WSADATA wsa;
     int result = WSAStartup(MAKEWORD(2, 2), &wsa);
@@ -27,27 +23,20 @@ int init_winsock() {
     }
     return result;
 }
-
-// Function to send a file
 void send_file(SOCKET peer_socket, const char* filename) {
     FILE* fp = fopen(filename, "rb");
     if (!fp) {
         printf("Cannot open file '%s'\n", filename);
         return;
     }
-
-    // Send the filename length and filename
     int filename_length = strlen(filename) + 1;
     send(peer_socket, (char*)&filename_length, sizeof(filename_length), 0);
     send(peer_socket, filename, filename_length, 0);
 
-    // Send the file size
     fseek(fp, 0, SEEK_END);
     long file_size = ftell(fp);
     fseek(fp, 0, SEEK_SET);
     send(peer_socket, (char*)&file_size, sizeof(file_size), 0);
-
-    // Send file content in chunks
     char buffer[CHUNK_SIZE];
     size_t bytes_read;
     while ((bytes_read = fread(buffer, 1, CHUNK_SIZE, fp)) > 0) {
@@ -58,26 +47,21 @@ void send_file(SOCKET peer_socket, const char* filename) {
     fclose(fp);
 }
 
-// Function to receive a file
 void receive_file(SOCKET peer_socket) {
-    // Receive the filename length and filename
     int filename_length;
     recv(peer_socket, (char*)&filename_length, sizeof(filename_length), 0);
     char filename[256];
     recv(peer_socket, filename, filename_length, 0);
 
-    // Open the file for writing
     FILE* fp = fopen(filename, "wb");
     if (!fp) {
         printf("Cannot create file '%s'\n", filename);
         return;
     }
 
-    // Receive the file size
     long file_size;
     recv(peer_socket, (char*)&file_size, sizeof(file_size), 0);
 
-    // Receive the file content
     char buffer[CHUNK_SIZE];
     long total_received = 0;
     int bytes_received;
@@ -91,7 +75,6 @@ void receive_file(SOCKET peer_socket) {
     fclose(fp);
 }
 
-// Main peer-to-peer logic
 void p2p_peer(const char* listen_port, const char* connect_ip, const char* connect_port, const char* filename) {
     // Start listening
     SOCKET listen_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -109,7 +92,6 @@ void p2p_peer(const char* listen_port, const char* connect_ip, const char* conne
 
     printf("Listening on port %s...\n", listen_port);
 
-    // Attempt to connect to another peer if IP and port are provided
     SOCKET connect_socket = INVALID_SOCKET;
     if (connect_ip && connect_port) {
         connect_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -128,7 +110,6 @@ void p2p_peer(const char* listen_port, const char* connect_ip, const char* conne
         }
     }
 
-    // Accept incoming connections
     struct sockaddr_in peer_addr;
     int peer_addr_len = sizeof(peer_addr);
     SOCKET peer_socket = accept(listen_socket, (struct sockaddr*)&peer_addr, &peer_addr_len);
