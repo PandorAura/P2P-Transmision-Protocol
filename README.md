@@ -1,7 +1,7 @@
 P2P FILE TRANSFER 
 ----------------------------------
 
-Overview:
+Overview (P2PTransfer.c):
 ---------
 This project implements a basic peer-to-peer file transfer application in C, using the Windows Sockets (Winsock) API. 
 Each peer can both listen for inbound connections (from other peers) and optionally connect to another peer’s IP and port. 
@@ -22,6 +22,7 @@ Features:
    - Start another peer specifying the IP and port of the first peer, plus a filename to send.
    - They exchange files in both directions.
 
+In the context of the project, there was also an attempt to make it work using a tracker, work can be found in the repository.
 
 https://github.com/user-attachments/assets/f3bf26de-720b-4ef3-b189-26f675f3a01e
 
