@@ -23,6 +23,23 @@ int init_winsock() {
     }
     return result;
 }
+
+bool file_is_readable(const char* filename) {
+    FILE* fp = fopen(filename, "rb");
+    if (fp) {
+        fclose(fp);
+        return true;
+    }
+    return false;
+}
+
+// Print the IP address and port of a sockaddr_in structure
+void print_peer_address(const struct sockaddr_in* addr, const char* label) {
+    char ipStr[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &addr->sin_addr, ipStr, sizeof(ipStr));
+    int port = ntohs(addr->sin_port);
+    printf("%s: %s:%d\n", label, ipStr, port);
+}
 void send_file(SOCKET peer_socket, const char* filename) {
     FILE* fp = fopen(filename, "rb");
     if (!fp) {
